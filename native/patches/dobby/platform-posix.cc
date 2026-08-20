@@ -161,25 +161,24 @@ void *AllocDualExec(size_t size) {
     return nullptr;
   }
 
-  auto *reserved = static_cast<uint8_t *>(
-      mmap(nullptr, size * 2, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
-  if (reserved == MAP_FAILED) {
-    close(fd);
-    return nullptr;
-  }
-
-  void *rx = mmap(reserved, size, PROT_READ | PROT_EXEC, MAP_SHARED | MAP_FIXED, fd, 0);
-  void *rw = mmap(reserved + size, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0);
+  // Independent RX/RW aliases of the same memfd. Adjacent MAP_FIXED pairs are
+  // not required, and they fail closed on domains that reject execmem.
+  void *rx = mmap(nullptr, size, PROT_READ | PROT_EXEC, MAP_SHARED, fd, 0);
+  void *rw = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
   close(fd);
   if (rx == MAP_FAILED || rw == MAP_FAILED) {
-    munmap(reserved, size * 2);
+    if (rx != MAP_FAILED)
+      munmap(rx, size);
+    if (rw != MAP_FAILED)
+      munmap(rw, size);
     return nullptr;
   }
 
   pthread_mutex_lock(&g_dual_lock);
   if (g_dual_count >= 64) {
     pthread_mutex_unlock(&g_dual_lock);
-    munmap(reserved, size * 2);
+    munmap(rx, size);
+    munmap(rw, size);
     return nullptr;
   }
   g_duals[g_dual_count++] = {static_cast<uint8_t *>(rx), static_cast<uint8_t *>(rw), size};
@@ -208,7 +207,13 @@ void *OSMemory::Allocate(size_t size, MemoryPermission access, void *fixed_addre
 
 #if defined(__ANDROID__)
   if (fixed_address == nullptr && (access == kReadExecute || access == kReadWriteExecute)) {
-    return AllocDualExec(size);
+    if (void *dual = AllocDualExec(size))
+      return dual;
+    // system_server and some domains cannot map executable memfd. Dobby CHECK
+    // does not abort, so a nullptr here becomes memcpy(NULL) and kills the
+    // process. Fall back to anonymous RX only after dual-map fails.
+    if (access == kReadWriteExecute)
+      return nullptr;
   }
 #endif
 

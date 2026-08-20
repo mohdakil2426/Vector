@@ -25,7 +25,8 @@ CodeMemoryArena *MemoryAllocator::allocateCodeMemoryArena(uint32_t size) {
   CHECK_EQ(size % OSMemory::PageSize(), 0);
   uint32_t arena_size = size;
   auto arena_addr = OSMemory::Allocate(arena_size, kReadExecute);
-  CHECK_NOT_NULL(arena_addr);
+  if (arena_addr == nullptr)
+    return nullptr;
 
   auto result = new CodeMemoryArena((addr_t)arena_addr, (size_t)arena_size);
   code_arenas.push_back(result);
@@ -44,6 +45,8 @@ CodeMemBlock *MemoryAllocator::allocateExecBlock(uint32_t size) {
     // allocate new arena
     auto arena_size = ALIGN_CEIL(size, OSMemory::PageSize());
     auto arena = allocateCodeMemoryArena(arena_size);
+    if (arena == nullptr)
+      return nullptr;
     block = arena->allocMemBlock(size);
     CHECK_NOT_NULL(block);
   }
@@ -54,10 +57,14 @@ CodeMemBlock *MemoryAllocator::allocateExecBlock(uint32_t size) {
 
 uint8_t *MemoryAllocator::allocateExecMemory(uint32_t size) {
   auto block = allocateExecBlock(size);
+  if (!block)
+    return nullptr;
   return (uint8_t *)block->addr;
 }
 uint8_t *MemoryAllocator::allocateExecMemory(uint8_t *buffer, uint32_t buffer_size) {
   auto mem = allocateExecMemory(buffer_size);
+  if (!mem)
+    return nullptr;
   auto ret = DobbyCodePatch(mem, buffer, buffer_size);
   CHECK_EQ(ret, 0);
   return mem;
