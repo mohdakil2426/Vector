@@ -146,8 +146,126 @@ struct DualExecRegion {
 };
 
 pthread_mutex_t g_dual_lock = PTHREAD_MUTEX_INITIALIZER;
-DualExecRegion g_duals[64];
+constexpr int kMaxDuals = 96;
+DualExecRegion g_duals[kMaxDuals];
 int g_dual_count = 0;
+
+bool DualContainsLocked(uint8_t *ptr, uint32_t size) {
+  for (int i = 0; i < g_dual_count; i++) {
+    if (ptr >= g_duals[i].rx && ptr + size <= g_duals[i].rx + g_duals[i].size)
+      return true;
+  }
+  return false;
+}
+
+bool PathIsSystemExecFile(const char *path) {
+  if (!path || path[0] != '/')
+    return false;
+  static const char *kPrefixes[] = {"/apex/",     "/system/", "/system_ext/",
+                                    "/vendor/",   "/product/", "/odm/"};
+  for (const char *prefix : kPrefixes) {
+    if (strncmp(path, prefix, strlen(prefix)) == 0)
+      return true;
+  }
+  return false;
+}
+
+// Duck High/Review for Finding B is file-backed /apex|/system RX with
+// Shared_Dirty or Anonymous > 0. Unnamed memfd is not anonymous and is not a
+// system path. Replace the dirty page in place (same VA) so PC-relative code
+// and Init hooks keep working.
+bool PageIsSystemRxFile(uintptr_t page) {
+  FILE *fp = fopen("/proc/self/maps", "r");
+  if (!fp)
+    return false;
+  char line[768];
+  bool hit = false;
+  while (fgets(line, sizeof(line), fp)) {
+    unsigned long start = 0, end = 0;
+    char perms[8] = {};
+    if (sscanf(line, "%lx-%lx %7s", &start, &end, perms) != 3)
+      continue;
+    if (page < start || page >= end)
+      continue;
+    if (perms[0] != 'r' || perms[2] != 'x')
+      break;
+    char *path = strchr(line, '/');
+    if (!path)
+      break;
+    size_t len = strlen(path);
+    while (len && (path[len - 1] == '\n' || path[len - 1] == '\r'))
+      path[--len] = 0;
+    hit = PathIsSystemExecFile(path);
+    break;
+  }
+  fclose(fp);
+  return hit;
+}
+
+bool RemapSystemPage(uintptr_t page) {
+  const size_t ps = static_cast<size_t>(OSMemory::PageSize());
+  auto *page_ptr = reinterpret_cast<uint8_t *>(page);
+
+  if (!PageIsSystemRxFile(page))
+    return false;
+
+  pthread_mutex_lock(&g_dual_lock);
+  if (DualContainsLocked(page_ptr, 1)) {
+    pthread_mutex_unlock(&g_dual_lock);
+    return true;
+  }
+
+  int fd = static_cast<int>(syscall(__NR_memfd_create, "", MFD_CLOEXEC));
+  if (fd < 0) {
+    pthread_mutex_unlock(&g_dual_lock);
+    return false;
+  }
+  if (ftruncate(fd, static_cast<off_t>(ps)) < 0) {
+    close(fd);
+    pthread_mutex_unlock(&g_dual_lock);
+    return false;
+  }
+  void *rw = mmap(nullptr, ps, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  if (rw == MAP_FAILED) {
+    close(fd);
+    pthread_mutex_unlock(&g_dual_lock);
+    return false;
+  }
+  memcpy(rw, page_ptr, ps);
+  void *rx = mmap(page_ptr, ps, PROT_READ | PROT_EXEC, MAP_SHARED | MAP_FIXED, fd, 0);
+  close(fd);
+  if (rx != page_ptr) {
+    munmap(rw, ps);
+    pthread_mutex_unlock(&g_dual_lock);
+    return false;
+  }
+#if defined(__GNUC__)
+  __builtin___clear_cache(reinterpret_cast<char *>(page_ptr),
+                          reinterpret_cast<char *>(page_ptr) + ps);
+#endif
+
+  if (g_dual_count >= kMaxDuals) {
+    pthread_mutex_unlock(&g_dual_lock);
+    munmap(rw, ps);
+    return true;
+  }
+  g_duals[g_dual_count++] = {static_cast<uint8_t *>(rx), static_cast<uint8_t *>(rw), ps};
+  pthread_mutex_unlock(&g_dual_lock);
+  return true;
+}
+
+bool RemapSystemExecPages(void *address, uint32_t size) {
+  if (!address || size == 0)
+    return false;
+  const uintptr_t ps = static_cast<uintptr_t>(OSMemory::PageSize());
+  uintptr_t start = reinterpret_cast<uintptr_t>(address) & ~(ps - 1);
+  uintptr_t end = (reinterpret_cast<uintptr_t>(address) + size + ps - 1) & ~(ps - 1);
+  for (uintptr_t page = start; page < end; page += ps) {
+    if (!RemapSystemPage(page))
+      return false;
+  }
+  return true;
+}
 
 void *AllocDualExec(size_t size) {
   const size_t page = static_cast<size_t>(OSMemory::PageSize());
@@ -175,7 +293,7 @@ void *AllocDualExec(size_t size) {
   }
 
   pthread_mutex_lock(&g_dual_lock);
-  if (g_dual_count >= 64) {
+  if (g_dual_count >= kMaxDuals) {
     pthread_mutex_unlock(&g_dual_lock);
     munmap(rx, size);
     munmap(rw, size);
@@ -230,7 +348,13 @@ void *OSMemory::Allocate(size_t size, MemoryPermission access, void *fixed_addre
 
 bool OSMemory::WriteExecutable(void *address, uint8_t *buffer, uint32_t size) {
 #if defined(__ANDROID__)
-  return WriteDualExec(address, buffer, size);
+  if (WriteDualExec(address, buffer, size))
+    return true;
+  // Init hooks land in libart .text (file-backed MAP_PRIVATE). mprotect+write
+  // COWs those pages and Duck scores Shared_Dirty / Anonymous on /apex.
+  if (RemapSystemExecPages(address, size) && WriteDualExec(address, buffer, size))
+    return true;
+  return false;
 #else
   (void)address;
   (void)buffer;

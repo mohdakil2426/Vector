@@ -6,6 +6,22 @@ set(CMAKE_CXX_STANDARD 23)
 
 add_subdirectory(${VECTOR_ROOT}/external external)
 
+if(NOT DEFINED VECTOR_VERSION_NAME)
+    set(VECTOR_VERSION_NAME "unknown")
+endif()
+if(NOT DEFINED VECTOR_INJECTED_PACKAGE_NAME)
+    set(VECTOR_INJECTED_PACKAGE_NAME "com.android.shell")
+endif()
+if(NOT DEFINED VECTOR_MANAGER_PACKAGE_NAME)
+    set(VECTOR_MANAGER_PACKAGE_NAME "org.matrix.vector.manager")
+endif()
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/common/vector_build_strings.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/vector_build_strings.h"
+    @ONLY)
+
 file(GLOB_RECURSE NATIVE_SOURCES "src/*.cpp")
 add_library(${PROJECT_NAME} STATIC ${NATIVE_SOURCES})
 
@@ -22,7 +38,7 @@ set(IGNORED_WARNINGS
 # --- Include Directories ---
 # Add the 'include' directory as a PUBLIC include path. This means any
 # target that links against vector_native will also inherit this include path.
-target_include_directories(${PROJECT_NAME} PUBLIC include)
+target_include_directories(${PROJECT_NAME} PUBLIC include "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 # Add the 'src' directory and external XZ library includes as PRIVATE.
 # These are only needed to build vector_native itself.

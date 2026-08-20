@@ -5,6 +5,8 @@
  * @brief Compile-time constants, version information, and platform-specific configurations.
  */
 
+#include "vector_build_strings.h"
+
 namespace vector::native {
 
 [[nodiscard]] constexpr bool IsDebugBuild() {
@@ -46,6 +48,6 @@ inline constexpr auto kLinkerPath = "/linker";
 const int kVersionCode = VERSION_CODE;
 
 /// The version name of the library, populated by the build system.
-const char *const kVersionName = VERSION_NAME;
+const char *const kVersionName = VECTOR_VERSION_NAME_LITERAL;
 
 }  // namespace vector::native

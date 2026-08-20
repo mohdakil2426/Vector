@@ -283,7 +283,6 @@ subprojects {
                 val flags =
                     listOf(
                         "-DVERSION_CODE=${versionCodeProvider.get()}",
-                        "-DVERSION_NAME='\"${versionNameProvider.get()}\"'",
                         // parallel_hashmap reaches for <emmintrin.h> whenever __SSE2__ is defined,
                         // and that header's static inline intrinsics arrive twice on the x86 ABIs:
                         // dex_builder.ixx and dex_helper.ixx each include phmap in their global
@@ -303,6 +302,7 @@ subprojects {
                     listOf(
                         "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
                         "-DVECTOR_ROOT=${rootDir.absolutePath}",
+                        "-DVECTOR_VERSION_NAME=${versionNameProvider.get()}",
                         // Enforce 16 KB page size alignment for Android 15+ compatibility
                         "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384",
                         "-DCMAKE_EXE_LINKER_FLAGS=-Wl,-z,max-page-size=16384",

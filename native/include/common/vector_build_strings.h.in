@@ -1,0 +1,7 @@
+#pragma once
+
+// Populated by native/CMakeLists.txt configure_file. Quotes live in this
+// template so Windows ninja cannot turn the value into a pp number.
+#define VECTOR_VERSION_NAME_LITERAL "@VECTOR_VERSION_NAME@"
+#define INJECTED_PACKAGE_NAME "@VECTOR_INJECTED_PACKAGE_NAME@"
+#define MANAGER_PACKAGE_NAME "@VECTOR_MANAGER_PACKAGE_NAME@"
