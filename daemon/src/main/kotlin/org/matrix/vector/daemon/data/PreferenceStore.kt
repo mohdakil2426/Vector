@@ -92,7 +92,7 @@ object PreferenceStore {
       updateModulePref("lspd", 0, "config", "enable_status_notification", enabled)
 
   fun isVerboseLogEnabled(): Boolean =
-      getModulePrefs("lspd", 0, "config")["enable_verbose_log"] as? Boolean ?: true
+      getModulePrefs("lspd", 0, "config")["enable_verbose_log"] as? Boolean ?: false
 
   fun setVerboseLog(enabled: Boolean) =
       updateModulePref("lspd", 0, "config", "enable_verbose_log", enabled)

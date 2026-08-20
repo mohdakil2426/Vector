@@ -275,8 +275,8 @@ object ManagerService : IManagerService.Stub() {
   // Reports the setting, not the setting OR'd with the build type. It used to be
   // `|| BuildConfig.DEBUG`, which made the value unwritable on a debug daemon: the manager could
   // never read false, so its switch snapped back on every tap and had to be greyed out. The OR was
-  // redundant anyway — `isVerboseLogEnabled()` already defaults to true — so a debug build still
-  // logs verbosely out of the box, and now a developer can also turn it off.
+  // redundant anyway — `isVerboseLogEnabled()` already defaults to false — so a debug build still
+  // matches a missing pref, and a developer can turn verbose logging on.
   override fun isVerboseLogEnabled() = PreferenceStore.isVerboseLogEnabled()
 
   override fun setVerboseLogEnabled(enabled: Boolean) {

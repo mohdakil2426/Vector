@@ -417,13 +417,13 @@ class SettingsRepository(context: Context) : StoreSettings, NetworkSettings {
     /**
      * Whether a stack trace in the log opens where it sits, or on a screen of its own.
      *
-     * Inline by default. The log is read with a filter applied and a scroll position worth keeping,
+     * Off by default. The log is read with a filter applied and a scroll position worth keeping,
      * and pushing a route for one entry costs both — which matters most when the reason you are
      * reading the log is to compare one trace against another. The screen is the better answer for
      * a trace long enough that having it inside the list is the thing in the way, so which one is
      * right depends on the reader, and that is what makes it a setting rather than a decision.
      */
-    private val _logTracesInline = MutableStateFlow(prefs.getBoolean("log_traces_inline", true))
+    private val _logTracesInline = MutableStateFlow(prefs.getBoolean("log_traces_inline", false))
     val logTracesInline: StateFlow<Boolean> = _logTracesInline.asStateFlow()
 
     fun setLogTracesInline(inline: Boolean) {

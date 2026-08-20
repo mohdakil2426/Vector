@@ -11,3 +11,12 @@
 build
 /captures
 bin/
+.agents/
+.claude/
+.codex/
+.superpowers/
+.mcp.json
+.codegraph/
+/docs/
+/native/tests/
+/daemon/src/test/
