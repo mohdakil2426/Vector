@@ -20,6 +20,19 @@ option(LSPLANT_BUILD_SHARED OFF)
 option(Plugin.SymbolResolver OFF)
 option(FMT_INSTALL OFF)
 
+# File-backed dual-map exec pages for Dobby (see native/patches/dobby).
+# Copied over the submodule so CI, which checks out a clean Dobby SHA, still
+# builds the Vector-owned change.
+set(_dobby_overlay "${CMAKE_CURRENT_SOURCE_DIR}/../native/patches/dobby")
+file(COPY "${_dobby_overlay}/platform.h"
+     DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/dobby/source/PlatformUnifiedInterface")
+file(COPY "${_dobby_overlay}/MemoryAllocator.cc"
+     DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/dobby/source/MemoryAllocator")
+file(COPY "${_dobby_overlay}/platform-posix.cc"
+     DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/dobby/source/Backend/UserMode/UnifiedInterface")
+file(COPY "${_dobby_overlay}/code-patch-tool-posix.cc"
+     DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/dobby/source/Backend/UserMode/ExecMemory")
+
 add_subdirectory(dobby)
 add_subdirectory(fmt)
 add_subdirectory(lsplant/lsplant/src/main/jni)

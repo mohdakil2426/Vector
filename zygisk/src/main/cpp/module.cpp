@@ -2,7 +2,6 @@
 #include <common/logging.h>
 #include <core/context.h>
 #include <core/native_api.h>
-#include <core/trampoline_pool.h>
 #include <elf/elf_image.h>
 #include <elf/symbol_cache.h>
 #include <jni/jni_bridge.h>
@@ -129,8 +128,6 @@ private:
             [](auto symbol) { return ElfSymbolCache::GetArt()->getSymbPrefixFirstAddress(symbol); },
         .generated_class_name = "Vector_",
         .generated_source_name = "",
-        .executable_memory_allocator = &vector::native::AllocateExecutableTrampoline,
-        .executable_memory_recycler = &vector::native::RecycleExecutableTrampoline,
     };
 
     // State managed within the class instance for each forked process.
